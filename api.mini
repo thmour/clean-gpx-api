@@ -1,0 +1,134 @@
+import http, fs
+
+import jsonwebtoken   as jwt
+import 'gps-util'     as gps
+import 'node-uuid'.v4 as random_str
+
+import redis, bcrypt
+import hapi, joi, boom as BOOM
+
+import 'pretty-data'.pd
+import './lib/clean'.clean
+
+require('easy-time')()
+
+db = redis.createClient()
+
+db.flushdb() //Optional
+
+server = new hapi.Server()
+
+import './config'
+
+server.connection({ 
+	host = config.host
+	port = config.port
+})
+
+server.register(require('hapi-auth-basic'), (err) {
+	
+	server.auth.strategy('simple', 'basic', { 
+		
+		validateFunc = (username, password, cb) {
+
+			db.get(username, (err, db_password) {
+				
+				if err : return cb(err, false)
+
+				if not db_password
+					//User not found, create one
+					db.set(username, bcrypt.hashSync(password, bcrypt.genSaltSync(10)), (err, res) {
+						if err
+							cb(err, false)
+						else
+							cb(null, true, { name = username })
+						end
+					})
+				else
+					bcrypt.compare(password, db_password, (err, isValid) {
+				    	cb(err, isValid, { name = username })
+					})
+				end
+			})
+		}
+	})
+
+	expire_time  = 30.minutes
+	refresh_time = 5.minutes
+
+	server.route({
+		method  = 'GET'
+		path	= '/access'
+		handler = (request, reply) {
+			key = '_' + request.auth.credentials.name
+			//Check if token exists or expired
+			db.ttl(key, (err, remaining) {
+				if err : return reply(BOOM.expectationFailed(err))
+
+				if remaining > refresh_time.to_seconds
+					reply(BOOM.unauthorized('You already got an access token, try again when it is about to expire or later'))
+				else
+					token = jwt.sign({ token_type = 'access', username = request.auth.credentials.name }, privateKey, { expiresInMinutes = expire_time })
+					db.set(key, true, (err, res) {
+						if err : return reply(BOOM.expectationFailed(err))
+
+						//Set expiration time in database
+						db.expire(key, expire_time.to_seconds, (err, res) {
+							if err : return reply(BOOM.expectationFailed(err))
+
+							reply({
+								token_type   = "Bearer"
+								access_token = token
+								expires_mins = expire_time
+							})
+						})
+					})
+				end
+			})
+		}
+		config = {
+			auth = 'simple'
+		}
+	})
+})
+
+privateKey = random_str()
+
+server.register(require('hapi-auth-jwt'), (error) {
+
+    server.auth.strategy('token', 'jwt', {
+        key = privateKey
+    })
+
+    server.route({
+        method  = 'POST',
+        path    = '/clean',
+        handler = (request, reply) {
+        	gps.gpxParse(request.payload.gpx, (err, points) {
+				if err : return reply(BOOM.badRequest(err))
+
+				clean(points, (err, result) {
+					if err : return reply(BOOM.badRequest(err))
+
+					gps.toGPX({points=result}, (err, gpx) {
+						if err
+							reply(BOOM.badRequest(err))
+						else
+							reply(pd.xml(gpx))
+						end
+					})
+				})
+			})
+        } 
+        config = {
+            auth = 'token'
+            validate = {
+				payload = joi.object().keys({
+					gpx = joi.string().max(1e6).required()
+				})
+			}
+        }
+    })
+})
+
+server.start()

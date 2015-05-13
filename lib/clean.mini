@@ -1,0 +1,133 @@
+import 'gps-util' as gps
+
+import request
+import "../config".gkey as api_key
+
+Number::toDegrees = () => this * 180 / Math.PI
+Number::toRadians = () => this * Math.PI / 180
+
+//bearing
+angle = (lat1, lng1, lat2, lng2) {
+	R = 63710000
+
+	lat1 = lat1.toRadians()
+	lat2 = lat2.toRadians()
+	Dlng = (lng2 - lng1).toRadians()
+
+	return Math.atan2(Math.sin(Dlng) * Math.cos(lat2), Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(Dlng)).toDegrees()
+}
+
+uniq = (arr) {
+	seen = {}
+	out  = []
+	j = 0
+	for item of arr
+		idx = "" + item.lng + item.lat
+	
+		if seen[idx] !== 1
+			seen[idx] = 1
+			out[j++] = item
+		end
+	end
+
+	return out
+}
+
+export clean = (points, cb) {
+	prev = points[0]
+	prev.curvature = 0
+	prev.angle = 0
+	prev.idx = 0
+	avg = 0
+	for i of 1 until points.length
+		point = points[i]
+		point.idx = i
+		/* km/h */
+		tmp_speed = gps.getDistance(point.lng, point.lat, prev.lng, prev.lat) / (point.time - prev.time)
+		
+		avg += point.speed = isFinite(tmp_speed) ? tmp_speed : 0
+		
+		point.curvature = Math.abs((point.angle = angle(prev.lat, prev.lng, point.lat, point.lng)) - prev.angle)
+
+		prev = point
+	end
+
+	avg /= points.length
+
+	//Filter unessesary data
+	path = points.slice(1, -1).filter(pt => (Math.abs(pt.speed - avg) / avg) <= 0.5)
+
+	limit = 98 //100 with start and end
+	while true
+		path = path.sort((pa, pb) => pb.curvature - pa.curvature)              \
+				   .slice(0, Math.max(limit, Math.floor(path.length * 0.75)))  \
+				   .sort((pa, pb) => pa.idx - pb.idx)
+		
+		if path.length <= limit: break
+
+		prev = points[0]
+		for point of path
+			point.curvature = Math.abs(point.angle - prev.angle)
+
+			prev = point
+		end
+	end
+
+	path = [].concat(points[0], path, points[points.length - 1])
+
+	pathstr = path.map(pt => '%pt.lat,%pt.lng').join('|')
+
+	request("https://roads.googleapis.com/v1/snapToRoads?interpolate=true&path=%{pathstr}&key=%{api_key}", (err, res, body) {
+		if err: return cb(err)
+
+		gtrack = uniq(JSON.parse(body).snappedPoints.map(point => {lat=point.location.latitude, lng=point.location.longitude, time=points[0].time}))
+
+		median_dist = 0
+		for i, g of gtrack
+			min_dist = Infinity
+			for j, p of path
+				new_dist = gps.getDistance(p.lng, p.lat, g.lng, g.lat)
+				if new_dist < min_dist
+					min_dist = new_dist
+					idx = j
+				end
+			end
+
+			g.gid = i
+			g.pid = idx
+			g.min_dist = min_dist
+
+			median_dist += min_dist
+		end
+
+		median_dist = 1.5 * median_dist / gtrack.length
+
+		i = -1
+		start = null
+		while ++i < gtrack.length
+			g = gtrack[i]
+
+			if start === null && g.min_dist >= median_dist
+				start = g
+			elif start !== null && g.min_dist < median_dist
+				if g.gid - start.gid <= 5 //Ignore short google path errors
+					start = null
+					continue
+				end
+
+				//Remove wrong google path segment and replace it with the right gpx path segment
+				Array::splice.apply(gtrack, [start.gid, g.gid - start.gid].concat(path[start.pid .. g.pid]))
+
+				//Update indexes, since gtrack is modified
+				i = start.gid + g.pid - start.pid
+				for j of i to gtrack.length - 1
+					gtrack[j].gid += (g.pid - start.pid) - (g.gid - start.gid)
+				end
+
+				start = null
+			end
+		end
+
+		cb(null, gtrack)
+	})
+}
