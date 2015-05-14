@@ -107,6 +107,7 @@ export clean = (points, cb) {
 		while ++i < gtrack.length
 			g = gtrack[i]
 
+			//start point contains the first point found to be far from the actual path
 			if start === null && g.min_dist >= median_dist
 				start = g
 			elif start !== null && g.min_dist < median_dist
@@ -127,6 +128,8 @@ export clean = (points, cb) {
 				start = null
 			end
 		end
+
+		gtrack[gtrack.length - 1].time = points[points.length - 1].time
 
 		cb(null, gtrack)
 	})
