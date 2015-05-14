@@ -73,6 +73,6 @@ This task replaces paths found in google roads api that are separated from the a
 1. In many cases boundaries to detect "noise" have constant values, which may not have a great result in various gpx tracks. These values should vary with the nature of the gpx track.
 2. The result file does not preserve the right time for the intermediate points. Also as seen some metadata are not stored on the result.
 3. The means calculated are arithmetic and they are greatly affected by noise values. Harmonic mean may be more suitable.
-4. The original path compress function is not sophisticated enough to ignore noise turns, and thus some essential points are ignored (it can be seen on the second gif).
+4. The original path compress function is not sophisticated enough to ignore noise turns, and thus some essential points are ignored (it can be seen on the first gif).
 5. The api could be extended to store statistic data for fine-tuning.
 6. Some more strict policies on account creation should be introduced to avoid DOS attacks and improve security, such as e-mails as usernames and more strict password requirements.
