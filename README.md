@@ -59,7 +59,7 @@ This task is terminated when the path is reduced to 100 points or less, which is
 
 - **Compare google map path result with the reduced path and replace points**
 
-This task replaces paths found in google roads api that are separated from the actual path.
+This task calculates the minimum distance between points of google maps result and the given gpx track. If the distance is not great enough, store concecutive points of google maps result in the result gpx. If the distance is above X meters, then check if that threshold is violated for a number of points. If the number of points is enough along with the length of that part of the path, then store the points of the given gpx track until the track meets with the google maps track. Repeat until the end of the gpx path.
 
 - **Return the modified google roads api path**
 
