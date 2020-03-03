@@ -11,7 +11,7 @@
     "hapi-auth-basic": "^2.0.0",
     "hapi-auth-jwt": "^2.1.0",
     "joi": "^5.1.0",
-    "jsonwebtoken": "^3.2.2",
+    "jsonwebtoken": "^4.2.2",
     "node-uuid": "^1.4.2",
     "polyline-encoded": "^0.0.7",
     "pretty-data": "^0.40.0",
