@@ -65,8 +65,8 @@ This task calculates the minimum distance between points of google maps result a
 
 ### Results
 
-![Alt Text](img/image 2.gif)
-![Alt Text](img/image 1.gif)
+![alt text](https://github.com/thmour/clean-gpx-api/raw/master/img/image%201.gif)
+![alt text](https://github.com/thmour/clean-gpx-api/raw/master/img/image%202.gif)
 
 ## Future Improvements
 
